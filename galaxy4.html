@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+	<link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
+	<script type="text/javascript" src="image.js"></script>
+	<script type="text/javascript" src="sprite.js"></script>
+	<script type="text/javascript" src="input.js"></script>
+	<script type="text/javascript" src="newgame.js"></script>
+	<script type="text/javascript" src="levels.js"></script>
+	<script type="text/javascript">
+
+var BACKGROUND = 'back.png';
+var SHIPS = 'galaxy_s.png';
+var GUN = 'gun.png';
+var EARTH2 = 'earth2.png';
+var ESHIP = 'enemy-ship.png';
+var ESHIP2 = 'enemy-ship2.png';
+var ESHIP3 = 'enemy-ship3.png';
+var BULLET = 'bullet.png';
+var PREVIEW = 'preview.png';
+var EXPLOSION = 'bullet.png';
+var UFOSHIP = 'ufo-ship.png';
+
+
+window.addEventListener('load', function(){
+	// resources.load([BACKGROUND, SHIPS, GUN, ESHIP, BULLET, PREVIEW]);
+	var canvas = document.querySelector('canvas');
+	canvas.width = 512;
+	canvas.height = 480;
+	resources.load([BACKGROUND, SHIPS, GUN, ESHIP, BULLET, PREVIEW, ESHIP2, ESHIP3, EARTH2,UFOSHIP]);
+	resources.onReady(function(){
+		var l1 = new GameLevelOne('canvas', [BACKGROUND, SHIPS, GUN, ESHIP, BULLET, PREVIEW], 200, 500, 10);
+		var l2 = new GameLevelOne('canvas', [BACKGROUND, SHIPS, GUN, ESHIP, ESHIP2, BULLET, PREVIEW], 200, 500, 20);
+		var l3 = new GameLevelTwo('canvas', [BACKGROUND, SHIPS, GUN, ESHIP, ESHIP2, BULLET, PREVIEW], 200, 500, 10);
+		var l4 = new GameLevelThree('canvas', [BACKGROUND, SHIPS, GUN, ESHIP, ESHIP3, BULLET, PREVIEW], 200, 500, 10);
+		var g = new GameManager(canvas, [l1,l2,l3,l4]);
+		g.nextLevel();
+		// g.start();
+	});
+	// resources.onReady(g.init);
+	// var g = new Game('canvas', [{rss: [BACKGROUND, GUN, ESHIP, BULLET,PREVIEW]}], '.galaxy .play-again', '.galaxy .pause', '.galaxy .veil');
+	// g.init();
+});
+	</script>
+	</script>
+	<style type="text/css">
+		.galaxy {
+			display: inline-block;
+			position: relative;
+			font-family: 'Press Start 2P', monospace;
+			font-size: 1.5rem;
+			background-color: black;
+			color: white;
+		}
+		.galaxy .scores {
+			display: inline-block;
+			float: right;
+			cursor: pointer;
+		}
+		.galaxy .veil {
+			position: absolute;
+			top: 0;
+			left: 0;
+			background-color: rgba(0,0,0,0.5);
+			width: 100%;
+			height: 100%;
+			text-align: center;
+		}
+		.galaxy .veil .play-block {
+			position: absolute;
+			top: 30%;
+			left: 0;
+			text-align: center;
+			width: 100%;
+		}
+
+		.galaxy .veil .game-over {
+			display: none;
+		}
+		.galaxy .btn {
+			margin: 10%;
+			display: block;
+			cursor: pointer;
+			padding: 1rem;
+		}
+		.galaxy .btn:hover {
+			border: 2px solid white;
+		}
+		.galaxy .scores-block {
+			padding: 1rem;
+		}
+		.galaxy .scores-block > * {
+			display: inline-block;
+		}
+	</style>
+</head>
+<body>
+	<div class="galaxy">
+		<div class="scores-block">
+			<div>Score: </div>
+			<div class="scores">0</div>
+		</div>
+		<canvas></canvas>
+		<div id="game-over" class="veil">
+			<div class="play-block">
+				<span class="start-game">Galaxy</span>
+				<div class="btn play-game">Play Game</div>
+			</div>
+		</div>
+		<div class="scores-block">
+			<div style="visibility: hidden;"></div>
+			<div class="scores pause">Pause</div>
+		</div>
+	</div>
+</body>

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+	<link href="https://fonts.googleapis.com/css?family=Press+Start+2P" rel="stylesheet">
+	<script type="text/javascript" src="image.js"></script>
+	<script type="text/javascript" src="sprite.js"></script>
+	<script type="text/javascript" src="input.js"></script>
+	<script type="text/javascript">
+// The main game loop
+
+// Загрузка изображений
+// Загрузка уровней
+// Подготовка canvas
+// Выбор уровня
+// Создание уровня
+// Запуск уровня
+
+var BACKGROUND = 'back.png';
+var SHIPS = 'galaxy_s.png';
+var GUN = 'gun.png';
+var ESHIP = 'enemy-ship.png';
+var ESHIP2 = 'enemy-ship2.png';
+var BULLET = 'bullet.png';
+var PREVIEW = 'preview.png'
+var EXPLOSION = 'bullet.png'
+
+function GameObject(pos, sprite, health){
+	this.pos = pos;
+	this.sprite = sprite;
+	this.health = health || 1;
+}
+
+function GameLevelIntro(){
+
+}
+
+function GameLevel(playerSpeed, bulletSpeed, enemySpeed, canvas, score_counter, enemyLayout) {
+	var self = this;
+	var d = document.querySelector('.galaxy');
+
+	// Speed in pixels per second
+	var playerSpeed = playerSpeed;
+	var bulletSpeed = bulletSpeed;
+	var enemySpeed  = enemySpeed;
+
+	var player = [];
+	var bullets = [];
+	var enemies = [];
+	var explosions = [];
+
+	self.isGameOver;
+	isPause = false;
+	var lastTime;
+	var lastFire = Date.now();
+	var terrainPattern;
+
+	var win_event = new Event('user-win');
+
+	// The score
+	var gameTime = 0;
+	var score = 0;
+	var score_el = d.querySelector(score_counter);
+
+	if (typeof(canvas) == 'string'){
+		canvas = document.querySelector(canvas);
+	}
+	var ctx = canvas.getContext("2d");
+	canvas.width = 512 ;
+	canvas.height = 480;
+
+
+	self.pause = function(){
+		isPause = !isPause;
+		if (!isPause){
+			lastTime = Date.now();
+			self.main();
+		}
+	}
+
+	self.init = function() {
+		terrainPattern = ctx.createPattern(resources.get(BACKGROUND), 'no-repeat');
+		lastTime = Date.now();
+		// self.setPreview();
+	};
+
+	self.main = function() {
+		if (self.isGameOver || isPause){
+			return;
+		}
+		var now = Date.now();
+		var dt = (now - lastTime) / 1000.0;
+
+		self.update(dt);
+		self.render();
+
+		lastTime = now;
+		requestAnimationFrame(self.main);
+	};
+
+	self.update = function(dt) {
+		gameTime += dt;
+
+		self.handleInput(dt);
+		self.updateEntities(dt);
+		self.checkCollisions();
+		self.checkWin();
+
+		score_el.textContent = score;
+	};
+
+	// Reset game to original state
+	self.reset = function() {
+		// game_over_veil.style.display = 'none';
+		self.isGameOver = false;
+		gameTime = 0;
+		score = 0;
+		lastTime = Date.now();
+
+		enemies = [];
+		bullets = [];
+
+
+		player = new GameObject([0, 0], //position
+			new Sprite(GUN // url
+			, [0, 0]   //pos
+			, [19, 20] //size
+			//, 16	   //speed
+			//, [0, 1] //frames 
+					   //dir
+					   //once
+		));
+		player.pos = [canvas.width / 2 - player.sprite.size[0], canvas.height - player.sprite.size[1] * 4];
+
+		enemies = enemyLayout(canvas);
+
+		self.main();
+	};
+
+
+	self.checkWin = function() {
+		if (enemies.length <= 0 ) {
+			document.dispatchEvent(win_event);
+			self.gameOver();
+		}
+	};
+
+	self.updateEntities = function(dt) {
+		// Update the player sprite animation
+		player.sprite.update(dt);
+
+		// Update all the bullets
+		for(var i = 0; i < bullets.length; i++) {
+			var bullet = bullets[i];
+
+			switch (bullet.dir) {
+			case 'up':
+				bullet.pos[1] -= bulletSpeed * dt;
+				break;
+			case 'down':
+				bullet.pos[1] += bulletSpeed * dt;
+				break;
+			default:
+				bullet.pos[0] += bulletSpeed * dt;
+			}
+
+			// Remove the bullet if it goes offscreen
+			if ( bullet.pos[1] < 0
+			  || bullet.pos[1] > canvas.height
+			  || bullet.pos[0] > canvas.width) {
+				bullets.splice(i, 1);
+				i--;
+			}
+		}
+
+		// Update level
+		// Update all the enemies
+		for (var i = 0; i < enemies.length; i++) {
+			enemies[i].pos[1] += enemySpeed * dt;
+			enemies[i].sprite.update(dt);
+
+			// Remove if offscreen
+			// if(enemies[i].pos[1] + enemies[i].sprite.size[1] < 0) {
+			// 	enemies.splice(i, 1);
+			// 	i--;
+			// }
+		}
+
+		// Update all the explosions
+		for (var i = 0; i < explosions.length; i++) {
+			explosions[i].sprite.update(dt);
+
+			// Remove if animation is done
+			if (explosions[i].sprite.done) {
+				explosions.splice(i, 1);
+				i--;
+			}
+		}
+	};
+
+	self.collides = function(x, y, r, b, x2, y2, r2, b2) {
+		return !(r <= x2 || x > r2 || b <= y2 || y > b2);
+	};
+
+	self.boxCollides = function(pos, size, pos2, size2) {
+		return self.collides(pos[0], pos[1],
+			pos[0] + size[0], pos[1] + size[1],
+			pos2[0], pos2[1],
+			pos2[0] + size2[0], pos2[1] + size2[1]
+		);
+	};
+
+	self.checkCollisions = function() {
+		self.checkPlayerBounds(player);
+
+		// Run collision detection for all enemies and bullets
+		for(var i = 0; i < enemies.length; i++) {
+			var enemy = enemies[i];
+			var pos = enemy.pos;
+			var size = enemy.sprite.size;
+
+			for(var j = 0; j < bullets.length; j++) {
+				var pos2 = bullets[j].pos;
+				var size2 = bullets[j].sprite.size;
+
+				if(self.boxCollides(pos, size, pos2, size2)) {
+					enemy.health--;
+					if (enemy.health <= 0) {
+						// Remove the enemy
+						enemies.splice(i, 1);
+						i--;
+
+						// Add score
+						score += 100;
+
+						// Add an explosion
+						explosions.push({
+							pos: pos,
+							sprite: new Sprite(EXPLOSION, [0, 0], [0, 0], 16,
+								[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+								null,true)
+						});
+					}
+					// Remove the bullet and stop this iteration
+					bullets.splice(j, 1);
+					break;
+				}
+			}
+
+			if(self.boxCollides(pos, size, player.pos, player.sprite.size)) {
+				self.gameOver();
+			}
+		}
+
+		for (var i = 0; i < enemies.length; i++) {
+			if(enemies[i].pos[1] + enemies[i].sprite.size[1] > canvas.height) {
+				self.gameOver();
+			}
+		}
+	};
+
+	self.checkPlayerBounds = function(game_obj) {
+		// Check bounds
+		var x_pos = game_obj.pos[0];
+		var y_pos = game_obj.pos[1];
+		var x_size = canvas.width - game_obj.sprite.size[0];
+		var y_size = canvas.height - game_obj.sprite.size[1];
+		if(x_pos < 0) {
+			game_obj.pos[0] = 0;
+		} else if(x_pos > x_size) {
+			game_obj.pos[0] = x_size;
+		}
+
+		if(y_pos < 0) {
+			game_obj.pos[1] = 0;
+		} else if(y_pos > y_size) {
+			game_obj.pos[1] = y_size;
+		}
+	};
+
+	// Draw everything
+	self.render = function() {
+		ctx.fillStyle = terrainPattern;
+		ctx.fillRect(0, 0, canvas.width, canvas.height);
+		// Render the player if the game isn't over
+		if(!self.isGameOver) {
+			self.renderEntity(player);
+		}
+
+		self.renderEntities(bullets);
+		self.renderEntities(enemies);
+		self.renderEntities(explosions);
+	};
+
+	self.renderEntities = function(list) {
+		for(var i=0; i<list.length; i++) {
+			self.renderEntity(list[i]);
+		}
+	};
+
+	self.renderEntity = function(entity) {
+		ctx.save();
+		ctx.translate(entity.pos[0], entity.pos[1]);
+		entity.sprite.render(ctx);
+		ctx.restore();
+	};
+
+	// Game over
+	self.gameOver = function() {
+		// game_over_veil.style.display = 'block';
+		self.isGameOver = true;
+	};
+
+	self.handleInput = function(dt) {
+	    if(input.isDown('DOWN') || input.isDown('s')) {
+	        player.pos[1] += playerSpeed * dt;
+	    }
+
+	    if(input.isDown('UP') || input.isDown('w')) {
+	        player.pos[1] -= playerSpeed * dt;
+	    }
+
+	    if(input.isDown('LEFT') || input.isDown('a')) {
+	        player.pos[0] -= playerSpeed * dt;
+	    }
+
+	    if(input.isDown('RIGHT') || input.isDown('d')) {
+	        player.pos[0] += playerSpeed * dt;
+	    }
+
+	    if(input.isDown('SPACE') && !self.isGameOver && Date.now() - lastFire > 100) {
+	        var x = player.pos[0] + player.sprite.size[0] / 2;
+	        var y = player.pos[1] + player.sprite.size[1] / 2;
+
+	        bullets.push({ pos: [x, y],
+	                       dir: 'up',
+	                       sprite: new Sprite(BULLET, [0, 0], [4, 4]) });
+	        // bullets.push({ pos: [x, y],
+	        //                dir: 'forward',
+	        //                sprite: new Sprite('img/sprites.png', [0, 50], [9, 5]) });
+	        // bullets.push({ pos: [x, y],
+	        //                dir: 'down',
+	        //                sprite: new Sprite('img/sprites.png', [0, 60], [9, 5]) });
+
+
+	        lastFire = Date.now();
+	    }
+	};
+
+}
+
+function GameManager(canvas, score_counter, restart_button, pause_button, veil_element, levels){
+	var self = this;
+	if (typeof(canvas) == 'string'){
+		canvas = document.querySelector(canvas);
+	}
+	var ctx = canvas.getContext("2d");
+	canvas.width = 512 ;
+	canvas.height = 480;
+
+	var d = document.querySelector('.galaxy');
+	var restart_el = d.querySelectorAll(restart_button);
+	var pause_el = d.querySelector(pause_button);
+	var game_over_veil = d.querySelector(veil_element);
+
+	var level;
+	var level_index = 0;
+	//new Game
+	//game.init
+		//bind listners to buttons
+		//init first level
+	//game.main //btn click start
+		//level.update
+		//level.render
+	//game.reset // game.start
+		//reset level
+	//game.pause
+	//game.stop
+	//game.nextLevel
+	//game.startLevel
+
+	self.init = function(){
+		d.addEventListener('user-win', self.main);
+		pause_el.addEventListener('click', self.pause);
+		Array.from(restart_el).forEach(function(item){
+			item.addEventListener('click', self.reset);
+		});
+		self.initLevel(levels[level_index++]);
+	}
+
+	self.main = function(){
+		// if (level.isGameOver){
+			self.initLevel(levels[level_index++]);
+		// } else {
+		// 	requestAnimationFrame(self.main);
+		// }
+	}
+
+	self.initLevel = function(level_obj){
+		console.dir(level_obj)
+		if (level_obj){
+			Array.from(restart_el).forEach(function(item){
+				item.style.display = 'none';
+			});
+			level = level_obj;
+			resources.load(level.rss);
+			resources.onReady(function(){
+				level = new GameLevel(level.playerSpeed, level.bulletSpeed, level.enemySpeed, canvas, '.scores', level.enemyLayout);
+				level.init();
+				level.reset();
+				Array.from(restart_el).forEach(function(item){
+					item.style.display = 'block';
+				});
+			});
+			requestAnimationFrame(self.main);
+		} else {
+			self.stop();
+		}
+	}
+
+	// Reset level
+	self.reset = function(){
+		game_over_veil.style.display = 'none';
+		level.reset();
+	}
+	self.pause = function(){
+		game_over_veil.style.display = 'none';
+		level.pause();
+	}
+	// Go to main menu
+	self.stop = function(){
+		self.pause();
+		game_over_veil.style.display = 'block';
+	}
+}
+
+
+function enemyLayout1(canvas){
+	var enemies = [];
+	// enemies level 
+	var enemy_size = {x:26, y:20};
+	var enemy_border = {x:12, y:16}; // Расстояние между объектами
+	var enemy_width = enemy_size.x + enemy_border.x;
+	var enemy_height = enemy_size.y + enemy_border.y;
+	var enemies_in_line = Math.floor(canvas.width / enemy_width);
+	var scr_border = (canvas.width - (enemies_in_line * enemy_width - enemy_border.x)) / 2;
+
+	for (var line = 0; line < 5; line++) {
+		for (var i = 0; i < enemies_in_line; i++) {
+			enemies.push(new GameObject([i * enemy_width + scr_border, line * enemy_height] //position
+				, new Sprite(ESHIP, [0, 0], [enemy_size.x, enemy_size.y]) //sprite
+			));
+		}
+	}
+	return enemies;
+}
+
+function enemyLayout2(canvas){
+	var enemies = [];
+	// enemies level 
+	var enemy_size = {x:26, y:20};
+	var enemy_border = {x:12, y:16}; // Расстояние между объектами
+	var enemy_width = enemy_size.x + enemy_border.x;
+	var enemy_height = enemy_size.y + enemy_border.y;
+	var enemies_in_line = Math.floor(canvas.width / enemy_width);
+	var scr_border = (canvas.width - (enemies_in_line * enemy_width - enemy_border.x)) / 2;
+
+	for (var line = 0; line < 3; line++) {
+		for (var i = 0; i < enemies_in_line; i++) {
+			enemies.push(new GameObject([i * enemy_width + scr_border, line * enemy_height] //position
+				, new Sprite(ESHIP2, [0, 0], [enemy_size.x, enemy_size.y]) //sprite
+				,2
+			));
+		}
+	}
+	for (var line = 3; line < 5; line++) {
+		for (var i = 0; i < enemies_in_line; i++) {
+			enemies.push(new GameObject([i * enemy_width + scr_border, line * enemy_height] //position
+				, new Sprite(ESHIP, [0, 0], [enemy_size.x, enemy_size.y]) //sprite
+				, 1
+			));
+		}
+	}
+	return enemies;
+}
+
+
+window.addEventListener('load', function(){
+	// resources.load([BACKGROUND, SHIPS, GUN, ESHIP, BULLET, PREVIEW]);
+	var g = new GameManager('canvas', '.scores', '.galaxy .play-again', '.galaxy .pause', '.galaxy .veil', [
+		 {rss: [BACKGROUND, SHIPS, GUN, ESHIP, BULLET, PREVIEW],  playerSpeed: 200, bulletSpeed: 500, enemySpeed: 50, enemyLayout: enemyLayout1}
+		,{rss: [BACKGROUND, SHIPS, GUN, ESHIP2, BULLET, PREVIEW], playerSpeed: 200, bulletSpeed: 500, enemySpeed: 50, enemyLayout: enemyLayout2}
+	]).init();
+	// resources.onReady(g.init);
+	// var g = new Game('canvas', [{rss: [BACKGROUND, GUN, ESHIP, BULLET,PREVIEW]}], '.galaxy .play-again', '.galaxy .pause', '.galaxy .veil');
+	// g.init();
+});
+
+	</script>
+	<style type="text/css">
+		.galaxy {
+			display: inline-block;
+			position: relative;
+			font-family: 'Press Start 2P', monospace;
+			font-size: 1.5rem;
+			background-color: black;
+			color: white;
+		}
+		.galaxy .scores {
+			display: inline-block;
+			float: right;
+			cursor: pointer;
+		}
+		.galaxy .veil {
+			position: absolute;
+			top: 0;
+			left: 0;
+			background-color: rgba(0,0,0,0.5);
+			width: 100%;
+			height: 100%;
+			text-align: center;
+		}
+		.galaxy .veil .play-block {
+			position: absolute;
+			top: 30%;
+			left: 0;
+			text-align: center;
+			width: 100%;
+		}
+
+		.galaxy .veil .game-over {
+			display: none;
+		}
+		.galaxy .btn {
+			margin: 10%;
+			display: block;
+			cursor: pointer;
+			padding: 1rem;
+		}
+		.galaxy .btn:hover {
+			border: 2px solid white;
+		}
+		.galaxy .scores-block {
+			padding: 1rem;
+		}
+		.galaxy .scores-block > * {
+			display: inline-block;
+		}
+	</style>
+</head>
+<body>
+	<div class="galaxy">
+		<div class="scores-block">
+			<div>Score: </div>
+			<div class="scores">0</div>
+		</div>
+		<canvas></canvas>
+		<div id="game-over" class="veil">
+			<div class="play-block">
+				<span class="start-game">Galaxy</span>
+				<div class="btn play-again">Play Game</div>
+			</div>
+		</div>
+		<div class="scores-block">
+			<div style="visibility: hidden;"></div>
+			<div class="scores pause">Pause</div>
+		</div>
+	</div>
+</body>
+</html>
